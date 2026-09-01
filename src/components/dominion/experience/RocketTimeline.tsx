@@ -11,11 +11,11 @@ useGLTF.preload("/spaceship.glb");
 function MiniRocket({
   scrollProgress,
   activeIndex,
-  isMobile,
+  rocketScale,
 }: {
   scrollProgress: any;
   activeIndex: number;
-  isMobile: boolean;
+  rocketScale: number;
 }) {
   const group = useRef<THREE.Group>(null!);
   const { scene } = useGLTF("/spaceship.glb");
@@ -45,7 +45,7 @@ function MiniRocket({
     const p = Math.max(0, Math.min(1, scrollProgress.get() || 0));
 
     // Subtle flight banking on desktop
-    const targetBank = isMobile ? 0 : activeIndex % 2 === 0 ? 0.05 : -0.05;
+    const targetBank = rocketScale < 0.28 ? 0 : activeIndex % 2 === 0 ? 0.05 : -0.05;
 
     // Zero-g hover micro-motion
     const hoverY = Math.sin(t * (3 + p * 2)) * 0.035;
@@ -55,8 +55,6 @@ function MiniRocket({
     group.current.rotation.z = targetBank;
     group.current.rotation.y = rollY;
   });
-
-  const rocketScale = isMobile ? 0.16 : 0.25;
 
   return (
     <group ref={group} scale={rocketScale}>
@@ -139,9 +137,11 @@ function MiniRocket({
 function MiniExhaust({
   scrollProgress,
   isMobile,
+  rocketScale,
 }: {
   scrollProgress: any;
   isMobile: boolean;
+  rocketScale: number;
 }) {
   const fumeCount = 45; // Reduced from 80 for cleaner, lighter smoke
   const sparkCount = 65;
@@ -150,15 +150,17 @@ function MiniExhaust({
   const sparksRef = useRef<THREE.InstancedMesh>(null!);
   const dummy = useMemo(() => new THREE.Object3D(), []);
 
+  const scaleFactor = rocketScale / 0.25;
+
   const fumes = useMemo(() => {
     return Array.from({ length: fumeCount }, () => ({
       position: new THREE.Vector3(0, -100, 0),
       velocity: new THREE.Vector3(),
       life: 0,
       maxLife: Math.random() * 0.7 + 0.35,
-      scale: Math.random() * 0.26 + 0.15,
+      scale: (Math.random() * 0.26 + 0.15) * scaleFactor,
     }));
-  }, [fumeCount]);
+  }, [fumeCount, scaleFactor]);
 
   const sparks = useMemo(() => {
     return Array.from({ length: sparkCount }, () => ({
@@ -166,9 +168,9 @@ function MiniExhaust({
       velocity: new THREE.Vector3(),
       life: 0,
       maxLife: Math.random() * 0.35 + 0.15,
-      scale: Math.random() * 0.09 + 0.04,
+      scale: (Math.random() * 0.09 + 0.04) * scaleFactor,
     }));
-  }, [sparkCount]);
+  }, [sparkCount, scaleFactor]);
 
   let nextFume = 0;
   let nextSpark = 0;
@@ -180,10 +182,10 @@ function MiniExhaust({
     // Refined gradual intensity
     const intensity = 0.2 + p * 0.75;
 
-    // Thruster nozzle position at top (+Y)
-    const rY = 0.72 + Math.sin(state.clock.elapsedTime * 3) * 0.035;
+    // Thruster nozzle position at top (+Y) dynamically scaled
+    const rY = 0.72 * scaleFactor + Math.sin(state.clock.elapsedTime * 3) * 0.035;
     // Tighter, cleaner column spread
-    const spread = (isMobile ? 0.24 : 0.36) * (0.65 + p * 0.45);
+    const spread = (isMobile ? 0.24 : 0.36) * scaleFactor * (0.65 + p * 0.45);
 
     // Controlled spawn rate: 1 fume per frame at idle, 2 during transit
     const spawnCount = Math.floor(0.8 + intensity * 1.4);
@@ -197,11 +199,11 @@ function MiniExhaust({
         (Math.random() - 0.5) * spread
       );
       f.velocity.set(
-        (Math.random() - 0.5) * (0.35 + p * 0.4),
-        (1.5 + Math.random() * 1.6) * (0.8 + p * 0.4),
-        (Math.random() - 0.5) * (0.35 + p * 0.4)
+        (Math.random() - 0.5) * (0.35 + p * 0.4) * scaleFactor,
+        (1.5 + Math.random() * 1.6) * (0.8 + p * 0.4) * scaleFactor,
+        (Math.random() - 0.5) * (0.35 + p * 0.4) * scaleFactor
       );
-      f.scale = (Math.random() * 0.22 + 0.14) * (0.75 + p * 0.65);
+      f.scale = (Math.random() * 0.22 + 0.14) * scaleFactor * (0.75 + p * 0.65);
       f.life = f.maxLife * (0.75 + p * 0.35);
       nextFume = (nextFume + 1) % fumeCount;
     }
@@ -216,11 +218,11 @@ function MiniExhaust({
         (Math.random() - 0.5) * (spread * 0.6)
       );
       s.velocity.set(
-        (Math.random() - 0.5) * (0.9 + p * 1.0),
-        (2.4 + Math.random() * 2.8) * (0.8 + p * 0.4),
-        (Math.random() - 0.5) * (0.9 + p * 1.0)
+        (Math.random() - 0.5) * (0.9 + p * 1.0) * scaleFactor,
+        (2.4 + Math.random() * 2.8) * (0.8 + p * 0.4) * scaleFactor,
+        (Math.random() - 0.5) * (0.9 + p * 1.0) * scaleFactor
       );
-      s.scale = (Math.random() * 0.08 + 0.04) * (0.75 + p * 0.6);
+      s.scale = (Math.random() * 0.08 + 0.04) * scaleFactor * (0.75 + p * 0.6);
       s.life = s.maxLife;
       nextSpark = (nextSpark + 1) % sparkCount;
     }
@@ -278,7 +280,13 @@ function MiniExhaust({
 }
 
 // ─── Dynamic Thruster Light with Plasma Micro-Flicker ──────────────────────
-function DynamicEngineLight({ scrollProgress }: { scrollProgress: any }) {
+function DynamicEngineLight({
+  scrollProgress,
+  rocketScale,
+}: {
+  scrollProgress: any;
+  rocketScale: number;
+}) {
   const lightRef = useRef<THREE.PointLight>(null!);
 
   useFrame((state) => {
@@ -288,7 +296,8 @@ function DynamicEngineLight({ scrollProgress }: { scrollProgress: any }) {
     lightRef.current.intensity = 3.2 + p * 4.5 + flicker;
   });
 
-  return <pointLight ref={lightRef} position={[0, 0.72, 0]} color="#01E864" distance={7} />;
+  const nozzleY = 0.72 * (rocketScale / 0.25);
+  return <pointLight ref={lightRef} position={[0, nozzleY, 0]} color="#01E864" distance={7} />;
 }
 
 // ─── Timeline Data ─────────────────────────────────────────────────────────
@@ -520,6 +529,7 @@ export default function RocketTimeline() {
   }, [activeDay, updateRocketPosition]);
 
   const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
+  const rocketScale = isMobile ? 0.24 : 0.36;
 
   // Active laser conduit illuminates up to the rocket center
   const activeLineHeight = useTransform(rocketYSpring, (y) => {
@@ -680,7 +690,7 @@ export default function RocketTimeline() {
 
           {/* ─── Persistent 3D Rocket Gliding Along The Line ─── */}
           <motion.div
-            className="absolute pointer-events-none z-30 left-4 sm:left-6 md:left-1/2 -translate-x-1/2 -translate-y-1/2 w-36 h-48 sm:w-44 sm:h-56 md:w-52 md:h-64 flex items-center justify-center"
+            className="absolute pointer-events-none z-30 left-4 sm:left-6 md:left-1/2 -translate-x-1/2 -translate-y-1/2 w-44 h-60 sm:w-56 sm:h-72 md:w-64 md:h-80 flex items-center justify-center"
             style={{
               top: useTransform(rocketYSpring, (y) => `${typeof y === "number" ? y : 36}px`),
             }}
@@ -698,14 +708,18 @@ export default function RocketTimeline() {
               <pointLight position={[-3, 1, 2]} intensity={3.5} color="#00ffcc" distance={8} />
               {/* Emerald Laser Line Glow Fill */}
               <directionalLight position={[0, -3, 2]} intensity={0.8} color="#01E864" />
-              <DynamicEngineLight scrollProgress={smoothProgress} />
+              <DynamicEngineLight scrollProgress={smoothProgress} rocketScale={rocketScale} />
               <React.Suspense fallback={null}>
                 <MiniRocket
                   scrollProgress={smoothProgress}
                   activeIndex={activeMilestone}
-                  isMobile={isMobile}
+                  rocketScale={rocketScale}
                 />
-                <MiniExhaust scrollProgress={smoothProgress} isMobile={isMobile} />
+                <MiniExhaust
+                  scrollProgress={smoothProgress}
+                  isMobile={isMobile}
+                  rocketScale={rocketScale}
+                />
               </React.Suspense>
             </Canvas>
           </motion.div>
